@@ -1,0 +1,78 @@
+CAPSTONE THREE: MODEL METRICS
+Investigating Fatigue-Related Aviation Safety Reports Through Statistical Analysis and NLP
+Author: Brittany | Springboard Data Science Career Track
+
+=====================================================================
+1. DATA
+=====================================================================
+Source:            NASA Aviation Safety Reporting System (ASRS) Database Online
+Sample:            2,191 fatigue-related reports, 2009-2025
+Model input:       Lemmatized primary narrative (text_lemma)
+Train / test:      1,752 / 439 reports (80/20), stratified by flight phase, random_state = 42
+
+=====================================================================
+2. FINAL MODEL: NON-NEGATIVE MATRIX FACTORIZATION (NMF)
+=====================================================================
+Library:           scikit-learn 1.6.1 (sklearn.decomposition.NMF)
+
+Hyperparameters
+  n_components (topics)   8      (tuned over 4, 6, 8, 10, 12, 14)
+  init                    nndsvda
+  max_iter                1000
+  random_state            42
+
+Features (TF-IDF vectorizer, fit on training narratives only)
+  ngram_range             (1, 2)   single words + two-word phrases
+  min_df                  5        word must appear in >= 5 narratives
+  max_df                  0.5      word must appear in <= 50% of narratives
+  sublinear_tf            True
+  norm                    L2
+  custom stop words       u, us, back, could, also, get, got, one, due, told, asked,
+                          said, gave, would, went, going, way, even, still, made,
+                          make, sure, know, think, felt (plus NLTK English list)
+  vocabulary size         9,925 terms (5,660 two-word phrases)
+
+Performance metrics
+  Topic coherence, NPMI (test set)        0.221   (primary metric; range -1 to 1)
+  Topic coherence, NPMI (training set)    0.243   (small gap = generalizes)
+  Topic diversity (unique top-25 words)   0.875
+  Stability across random seeds           1.000   (Jaccard of top-10 words)
+  Reconstruction error per report         0.959 train / 0.961 test
+
+=====================================================================
+3. MODEL COMPARISON (best setting of each model, test set)
+=====================================================================
+Model     Tuned                          Best k  Coherence  Diversity  Stability  Other
+NMF       k = 4-14                       8       0.221      0.875      1.000      -
+LDA       k = 4-14 x alpha (1/k, 0.1)    8       0.165      0.685      0.446      perplexity 5,407
+K-Means   k = 4-14                       10      0.211      0.684      0.666      silhouette 0.015
+(Full grid: models/model_comparison_metrics.csv)
+
+=====================================================================
+4. FINAL TOPICS
+=====================================================================
+#  Theme                                    Coherence  Main theme in (reports)
+0  Visual approach & terrain awareness      0.233      267
+1  Fatigue, rest & crew scheduling          0.231      395
+2  Gate, cabin & pre-departure operations   0.268      394
+3  ATC workload & staffing                  0.209      151
+4  Taxi & runway incursion risk             0.268      223
+5  Altitude & clearance deviations          0.196      336
+6  Maintenance work & task errors           0.110      183
+7  Approach configuration & go-arounds      0.249      242
+(Top words per topic: models/final_topics.csv)
+
+=====================================================================
+5. INTEGRATION MODEL: PREDICTING A REPORT'S MAIN THEME FROM CODED FIELDS
+=====================================================================
+Model:             Multinomial logistic regression (L2), class_weight = balanced
+Features (41):     28 dummy features (phase, time of day, reporter role, mission,
+                   operator), 11 human-factor indicators (0/1),
+                   2 standardized numeric (year, log narrative length)
+Tuning:            C in {0.01, 0.03, 0.1, 0.3, 1, 3}, 5-fold stratified CV, macro F1
+Best C:            0.1   (CV macro F1 = 0.576)
+
+Test performance                Accuracy   Macro F1
+  Logistic regression (tuned)   0.554      0.575
+  Baseline: most frequent       0.159      0.034
+  Baseline: random by frequency 0.134      0.128
